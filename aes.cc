@@ -13,12 +13,34 @@ int main(int argc, char **argv) {
     string input_file(argv[6]);
     string output_file(argv[8]);
     string mode = argv[10];
-    vector<unsigned char> test1{ '1', '2', '3' };
-    vector<unsigned char> test2{ '4', '5', '6' };
-    vector<vector<unsigned char>> test_matrix{ test1, test2 };
+    vector<unsigned char> test1{ '1', '2', '3', '4' };
+    vector<unsigned char> test2{ '5', '6', '7', '8' };
+    vector<unsigned char> test3{ '9', 'a', 'b', 'c' };
+    vector<unsigned char> test4{ 'd', 'e', 'f', 'g' };
+    vector<vector<unsigned char>> test_matrix{ test1, test2, test3, test4 };
     vector<vector<vector<unsigned char>>> input_array{ test_matrix };
 
-    subBytes(input_array);
+    for (int i = 0; i < input_array.size(); i++) {
+        for(int row = 0; row < input_array[i].size(); row++) {
+            for(int col = 0; col < input_array[i][row].size(); col++) {
+                     printf("%x ", input_array[i][row][col]);
+            }
+            printf("\n");
+        }
+     }
+
+//    subBytes(input_array);
+    shiftRows(input_array);
+
+    for (int i = 0; i < input_array.size(); i++) {
+        for(int row = 0; row < input_array[i].size(); row++) {
+            for(int col = 0; col < input_array[i][row].size(); col++) {
+                 printf("%x ", input_array[i][row][col]);
+            }
+        printf("\n");
+        }
+    }
+
 
 }
 
@@ -46,13 +68,31 @@ void subBytes(vector<vector<vector<unsigned char>>> &input_array) {
     for (int i = 0; i < input_array.size(); i++) {
         for(int row = 0; row < input_array[i].size(); row++) {
             for(int col = 0; col < input_array[i][row].size(); col++) {
+                // get value to use as index into lookup table
                 unsigned char value = input_array[i][row][col];
+                // get first nibble for row index
                 int lookup_row = (value & 0xF0) >> 4;
+                // get second nibble for column index
                 int lookup_col = value & 0x0F;
+                // replace value with the value in lookup table
                 input_array[i][row][col] = lookup_table[lookup_row][lookup_col];
             }
         }
     }
 
+}
+
+void shiftRows (vector<vector<vector<unsigned char>>> &input_array) {
+   // make a copy of the input vector to reference when shifting values
+   vector<vector<vector<unsigned char>>> old_array = input_array;
+
+   for (int i = 0; i < input_array.size(); i++) {
+      for(int row = 1; row < input_array[i].size(); row++) {
+         for(int col = 0; col < input_array[i][row].size(); col++) {
+            // replace value with the value found by shifting row bytes
+            input_array[i][row][col] = old_array[i][row][(col+row)%4];
+         }
+      }
+   }
 }
 
