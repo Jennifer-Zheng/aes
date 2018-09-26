@@ -4,6 +4,18 @@
 #include <bitset>
 using namespace std;
 
+void addRoundKeys(vector< vector < vector<unsigned char> > > &matrix_list, vector < vector<unsigned char> > key_schedule, int round_num) {
+    for (int i = 0; i < matrix_list.size(); ++i) {
+        int key_column = 4*round_num;
+        for(int col = 0; col < 4; ++col) {
+            for(int row = 0; row < 4; ++row) {
+                matrix_list[i][row][col] ^= key_schedule[row][key_column];
+            }
+            ++key_column;
+        }
+    }
+}
+
 vector <unsigned char> SubWord(vector <unsigned char> word) {
     unsigned char lookup_table[16][16] =
     {
@@ -216,6 +228,7 @@ int main()
             cout << "===" << endl;
         }
         //*/
+        addRoundKeys(matrix_list, key_schedule, 0);
 
     	file.close();
     } else {
