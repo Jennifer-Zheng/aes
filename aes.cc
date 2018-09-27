@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
     string output_file_str(argv[8]);
     string mode = argv[10];
         ifstream key_file;
-    int key_length = 128;
+    
     vector<unsigned char> key;
 
     // Obtain key file
@@ -44,8 +44,8 @@ int main(int argc, char **argv) {
             ++key_bytes;
         }
 
-        if((8 * key_bytes) != key_length) {
-            cout << "Your key is not " << key_length << "bits long " << endl;
+        if((8 * key_bytes) != key_size) {
+            cout << "Your key is not " << key_size << "bits long " << endl;
             cout << "Your key is " << (8 * key_bytes) << "bits long " << endl;
             return 0;
         }
@@ -54,14 +54,14 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    int n_k = key_length / 32;
+    int n_k = key_size / 32;
     int n_r = 0;
-    if(key_length == 128) {
+    if(key_size == 128) {
         n_r = 10;
-    } else if(key_length == 256) {
+    } else if(key_size == 256) {
         n_r = 14;
     }
-    vector < vector<unsigned char> > key_schedule = KeyExpansion(key,key_length);
+    vector < vector<unsigned char> > key_schedule = KeyExpansion(key,key_size);
 
     
     // Opens a file as binary
