@@ -2,7 +2,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <bitset>
 using namespace std;
+
+void printMatrix(vector<vector<vector<unsigned char> >> matrix_list);
 
 void addRoundKey(vector< vector < vector<unsigned char> > > &matrix_list, vector < vector<unsigned char> > key_schedule, int round_num);
 void subBytes(vector<vector<vector<unsigned char> >> &input_array);
@@ -94,24 +97,29 @@ int main(int argc, char **argv) {
             matrix_pos = (matrix_pos+1) % 16;
             ++num_bytes;            
         }
-        cout << "num_bytes: " << num_bytes << endl;
-        int rem = num_bytes % 16;
-        if (rem == 0) {
-            // If we recieved a factor of 16 bytes, we add a new padding matrix
-            cout << "ANOTHER" << endl;
-            vector< vector<unsigned char> > matrix(4, vector<unsigned char> (4, 16));
-            matrix_list.push_back(matrix);
-        } else {
-            // Otherwise, we pad the rest of the current matrix
-            cout << "ADD " << 16-rem << " PAD CELLS"<< endl;
-            for(int i = matrix_pos; i < 16; ++i) {
-                int row = i % 4;
-                int col = i / 4;
-                matrix_list[matrix_index][row][col] = (16-rem);
-            }
-        }
         file.close();
 
+        // If we are encrypting, make sure that we pad to a factor of 16 bytes
+        if(mode == "encrypt") {
+            // cout << "num_bytes: " << num_bytes << endl;
+            int rem = num_bytes % 16;
+            if (rem == 0) {
+                // If we recieved a factor of 16 bytes, we add a new padding matrix
+                cout << "ADD A NEW PADDING MATRIX" << endl;
+                vector< vector<unsigned char> > matrix(4, vector<unsigned char> (4, 16));
+                matrix_list.push_back(matrix);
+            } else {
+                // Otherwise, we pad the rest of the current matrix
+                cout << "ADD " << 16-rem << " PAD CELLS"<< endl;
+                for(int i = matrix_pos; i < 16; ++i) {
+                    int row = i % 4;
+                    int col = i / 4;
+                    matrix_list[matrix_index][row][col] = (16-rem);
+                }
+            }
+
+        }
+        
         // Rijndael's Algorithm
         if(mode == "encrypt") {
             addRoundKey(matrix_list, key_schedule, 0);
@@ -137,28 +145,61 @@ int main(int argc, char **argv) {
             addRoundKey(matrix_list, key_schedule, 0);
         }
 
-        // Create Output
+        // Create Output File
+        // If we are decrypting, find the number of pads so we don't print them
+        int num_pads = 0;
+        if(mode == "decrypt") {
+            num_pads = matrix_list[matrix_list.size()-1][3][3];
+            cout << num_pads << endl;
+        }
+        int bytes_to_print = num_bytes - num_pads;
+        int num_bytes_printed = 0;
+
         ofstream output(output_file_str, ios::binary);
-        int num_printed_bytes = 0; // compare against num_bytes;
         for(int i = 0; i < matrix_list.size(); ++i) {
             for(int c = 0; c < 4; ++c) {
                 for(int r = 0; r < 4; ++r) {
-                    if(num_printed_bytes < num_bytes){
-                        char byte = matrix_list[i][r][c];
-                        output.put(byte);
-                    } else {
+                    if(mode == "decrypt" && num_bytes_printed >= bytes_to_print){
                         break;
                     }
-                    ++num_printed_bytes;
+                    char byte = matrix_list[i][r][c];
+                        output.put(byte);
+                    ++num_bytes_printed;
                 }
             }
         }
-        
         output.close();
+                
     } else {
         cout << "Error with opening the input file" << endl;
     }
 
+}
+
+void printMatrix(vector<vector<vector<unsigned char> >> matrix_list){
+    // Prints Matrix
+    for(int i = 0; i < matrix_list.size(); ++i) 
+    {
+        cout << "= MATRIX " << i+1 << " =" << endl;
+        for(int j = 0; j < 4; ++j) 
+        {
+            for(int k = 0; k < 4; ++k) {
+                unsigned char byte = matrix_list[i][j][k];
+                bitset<8> bits(byte);
+                if(byte == '\n') {
+                    cout << "\\n";
+                } else {
+                    cout << byte;
+                }
+                cout << " (" << bits << ")";
+                if(k != 3) {
+                    cout << ",";
+                }
+            }
+            cout << endl;
+        }
+        cout << "===" << endl;
+    }
 }
 
 void subBytes(vector<vector<vector<unsigned char> >> &input_array) {
