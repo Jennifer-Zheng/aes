@@ -111,6 +111,32 @@ int main(int argc, char **argv) {
             }
         }
         file.close();
+
+        // Rijndael's Algorithm
+        if(mode == "encrypt") {
+            addRoundKey(matrix_list, key_schedule, 0);
+            for(int r = 1; r <= (n_r - 1); ++r) {
+                subBytes(matrix_list);
+                shiftRows(matrix_list);
+                mixColumns(matrix_list);
+                addRoundKey(matrix_list, key_schedule, r);
+            }
+            subBytes(matrix_list);
+            shiftRows(matrix_list);
+            addRoundKey(matrix_list, key_schedule, n_r);
+        } else if(mode == "decrypt") {
+            addRoundKey(matrix_list, key_schedule, n_r);
+            for(int r = (n_r - 1); r >= 1; --r) {
+                inverseShiftRows(matrix_list);
+                inverseSubBytes(matrix_list);
+                addRoundKey(matrix_list, key_schedule, r);
+                inverseMixColumns(matrix_list);
+            }
+            inverseShiftRows(matrix_list);
+            inverseSubBytes(matrix_list);
+            addRoundKey(matrix_list, key_schedule, 0);
+        }
+
         // Create Output
         ofstream output(output_file_str, ios::binary);
         int num_printed_bytes = 0; // compare against num_bytes;
