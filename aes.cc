@@ -15,6 +15,12 @@ int main (int argc, char **argv) {
     
     std::vector<unsigned char> key;
 
+    if(key_size != 256 && key_size != 128) {
+        std::cout << "Invalid Key Size: " << key_size << std::endl;
+        std::cout << "Only 128 or 256 bit keys are supported" << std::endl;
+        return 0;
+    }
+
     // Obtain key file
     key_file.open(key_file_str, std::ios::binary);
     if (key_file.is_open()) {
@@ -82,16 +88,13 @@ int main (int argc, char **argv) {
 
         // If we are encrypting, make sure that we pad to a factor of 16 bytes
         if (mode == "encrypt") {
-            // cout << "num_bytes: " << num_bytes << endl;
             int rem = num_bytes % 16;
             if (rem == 0) {
                 // If we recieved a factor of 16 bytes, we add a new padding matrix
-                std::cout << "ADD A NEW PADDING MATRIX" << std::endl;
                 std::vector<std::vector<unsigned char>> matrix(4, std::vector<unsigned char> (4, 16));
                 matrix_list.push_back(matrix);
             } else {
                 // Otherwise, we pad the rest of the current matrix
-                std::cout << "ADD " << 16-rem << " PAD CELLS"<< std::endl;
                 for (int i = matrix_pos; i < 16; ++i) {
                     int row = i % 4;
                     int col = i / 4;
@@ -130,7 +133,6 @@ int main (int argc, char **argv) {
         int num_pads = 0;
         if (mode == "decrypt") {
             num_pads = matrix_list[matrix_list.size()-1][3][3];
-            std::cout << num_pads << std::endl;
         }
         int bytes_to_print = num_bytes - num_pads;
         int num_bytes_printed = 0;
@@ -152,30 +154,6 @@ int main (int argc, char **argv) {
                 
     } else {
         std::cout << "Error with opening the input file" << std::endl;
-    }
-}
-
-void PrintMatrix (std::vector<std::vector<std::vector<unsigned char>>> matrix_list) {
-    // Prints Matrix
-    for (int i = 0; i < matrix_list.size(); ++i) {
-        std::cout << "= MATRIX " << i+1 << " =" << std::endl;
-        for (int j = 0; j < 4; ++j) {
-            for (int k = 0; k < 4; ++k) {
-                unsigned char byte = matrix_list[i][j][k];
-                std::bitset<8> bits(byte);
-                if (byte == '\n') {
-                    std::cout << "\\n";
-                } else {
-                    std::cout << byte;
-                }
-                std::cout << " (" << bits << ")";
-                if (k != 3) {
-                    std::cout << ",";
-                }
-            }
-            std::cout << std::endl;
-        }
-        std::cout << "===" << std::endl;
     }
 }
 
@@ -430,7 +408,8 @@ void InverseSubBytes (std::vector<std::vector<std::vector<unsigned char>>> &inpu
     }
 }
 
-void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &matrix_list, std::vector<std::vector<unsigned char>> key_schedule, int round_num) {
+void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &matrix_list, 
+                  std::vector<std::vector<unsigned char>> key_schedule, int round_num) {
     for (int i = 0; i < matrix_list.size(); ++i) {
         int key_column = 4*round_num;
         for (int col = 0; col < 4; ++col) {
