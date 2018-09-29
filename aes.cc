@@ -54,7 +54,7 @@ int main (int argc, char **argv) {
 
     // Opens a file as binary
     std::ifstream file;
-    std::vector<std::vector<std::vector<unsigned char>>> matrix_list;
+    std::vector<std::vector<std::vector<unsigned char>>> state;
     int num_bytes = 0;
     file.open(input_file_str, std::ios::binary);
     if (file.is_open()) {
@@ -68,7 +68,7 @@ int main (int argc, char **argv) {
             // If it is 0, it means we should start a new matrix
             if (matrix_pos == 0) {
                 std::vector<std::vector<unsigned char>> matrix(4, std::vector<unsigned char> (4, 0));
-                matrix_list.push_back(matrix);
+                state.push_back(matrix);
                 // Update the current matrix
                 ++matrix_index;
             }
@@ -78,7 +78,7 @@ int main (int argc, char **argv) {
             int row = matrix_pos % 4;
             int col = matrix_pos / 4;
 
-            matrix_list[matrix_index][row][col] = (unsigned char)byte;
+            state[matrix_index][row][col] = (unsigned char)byte;
             
             // Updates the next position in the matrix & the number of bytes collectd
             matrix_pos = (matrix_pos+1) % 16;
@@ -92,61 +92,61 @@ int main (int argc, char **argv) {
             if (rem == 0) {
                 // If we recieved a factor of 16 bytes, we add a new padding matrix
                 std::vector<std::vector<unsigned char>> matrix(4, std::vector<unsigned char> (4, 16));
-                matrix_list.push_back(matrix);
+                state.push_back(matrix);
             } else {
                 // Otherwise, we pad the rest of the current matrix
                 for (int i = matrix_pos; i < 16; ++i) {
                     int row = i % 4;
                     int col = i / 4;
-                    matrix_list[matrix_index][row][col] = (16-rem);
+                    state[matrix_index][row][col] = (16-rem);
                 }
             }
         }
         
         // Rijndael's Algorithm
         if (mode == "encrypt") {
-            AddRoundKey(matrix_list, key_schedule, 0);
+            AddRoundKey(state, key_schedule, 0);
             for (int r = 1; r <= (n_r - 1); ++r) {
-                SubBytes(matrix_list);
-                ShiftRows(matrix_list);
-                MixColumns(matrix_list);
-                AddRoundKey(matrix_list, key_schedule, r);
+                SubBytes(state);
+                ShiftRows(state);
+                MixColumns(state);
+                AddRoundKey(state, key_schedule, r);
             }
-            SubBytes(matrix_list);
-            ShiftRows(matrix_list);
-            AddRoundKey(matrix_list, key_schedule, n_r);
+            SubBytes(state);
+            ShiftRows(state);
+            AddRoundKey(state, key_schedule, n_r);
         } else if (mode == "decrypt") {
-            AddRoundKey(matrix_list, key_schedule, n_r);
+            AddRoundKey(state, key_schedule, n_r);
             for (int r = (n_r - 1); r >= 1; --r) {
-                InverseShiftRows(matrix_list);
-                InverseSubBytes(matrix_list);
-                AddRoundKey(matrix_list, key_schedule, r);
-                InverseMixColumns(matrix_list);
+                InverseShiftRows(state);
+                InverseSubBytes(state);
+                AddRoundKey(state, key_schedule, r);
+                InverseMixColumns(state);
             }
-            InverseShiftRows(matrix_list);
-            InverseSubBytes(matrix_list);
-            AddRoundKey(matrix_list, key_schedule, 0);
+            InverseShiftRows(state);
+            InverseSubBytes(state);
+            AddRoundKey(state, key_schedule, 0);
         }
 
         // Create Output File
-        // If we are decrypting, find the number of pads so we don't print them
+        // If we are decrypting, find the number of pads so we don't write them
         int num_pads = 0;
         if (mode == "decrypt") {
-            num_pads = matrix_list[matrix_list.size()-1][3][3];
+            num_pads = state[state.size()-1][3][3];
         }
-        int bytes_to_print = num_bytes - num_pads;
-        int num_bytes_printed = 0;
+        int bytes_to_write = num_bytes - num_pads;
+        int num_bytes_written = 0;
 
         std::ofstream output(output_file_str, std::ios::binary);
-        for (int i = 0; i < matrix_list.size(); ++i) {
+        for (int i = 0; i < state.size(); ++i) {
             for (int c = 0; c < 4; ++c) {
                 for (int r = 0; r < 4; ++r) {
-                    if (mode == "decrypt" && num_bytes_printed >= bytes_to_print){
+                    if (mode == "decrypt" && num_bytes_written >= bytes_to_write){
                         break;
                     }
-                    char byte = matrix_list[i][r][c];
+                    char byte = state[i][r][c];
                     output.put(byte);
-                    ++num_bytes_printed;
+                    ++num_bytes_written;
                 }
             }
         }
@@ -408,13 +408,13 @@ void InverseSubBytes (std::vector<std::vector<std::vector<unsigned char>>> &inpu
     }
 }
 
-void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &matrix_list, 
+void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &state, 
                   std::vector<std::vector<unsigned char>> key_schedule, int round_num) {
-    for (int i = 0; i < matrix_list.size(); ++i) {
+    for (int i = 0; i < state.size(); ++i) {
         int key_column = 4*round_num;
         for (int col = 0; col < 4; ++col) {
             for (int row = 0; row < 4; ++row) {
-                matrix_list[i][row][col] ^= key_schedule[row][key_column];
+                state[i][row][col] ^= key_schedule[row][key_column];
             }
             ++key_column;
         }
