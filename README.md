@@ -1,8 +1,8 @@
 # AES
 ## CS361 AES Project
 
-Name1:
- eid1:
+Name1: Yuanhui Zheng
+ eid1: yz22294
 
 Name2: Jong-Min Richard Kim
  eid2: jrk2826
@@ -15,7 +15,7 @@ Example:
 
 This program should be compiled using C++11.
 
-g++ -std=c++17 aes.cc -o program
+g++ -std=c++11 aes.cc -o program
 
 = Algorithm Description
 
