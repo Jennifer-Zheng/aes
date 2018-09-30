@@ -1,8 +1,6 @@
 #ifndef AES_H_
 #define AES_H_
 
-void PrintMatrix (std::vector<std::vector<std::vector<unsigned char>>> matrix_list);
-
 void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &matrix_list,
                   std::vector<std::vector<unsigned char>> key_schedule, int round_num);
 void SubBytes (std::vector<std::vector<std::vector<unsigned char>>> &input_array);
