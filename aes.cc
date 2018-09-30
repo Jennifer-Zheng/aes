@@ -1,21 +1,22 @@
+// Copyright 2018 Yuanhui Zheng, Jong-Min Richard Kim
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
 #include <bitset>
-#include "aes.h"
+#include "./aes.h"
 
-int main (int argc, char **argv) {
+int main(int argc, char **argv) {
     int key_size = std::stoi(argv[2]);
     std::string key_file_str(argv[4]);
     std::string input_file_str(argv[6]);
     std::string output_file_str(argv[8]);
     std::string mode = argv[10];
     std::ifstream key_file;
-    
+
     std::vector<unsigned char> key;
 
-    if(key_size != 256 && key_size != 128) {
+    if (key_size != 256 && key_size != 128) {
         std::cout << "Invalid Key Size: " << key_size << std::endl;
         std::cout << "Only 128 or 256 bit keys are supported" << std::endl;
         return 0;
@@ -26,7 +27,7 @@ int main (int argc, char **argv) {
     if (key_file.is_open()) {
         char byte;
         int key_bytes = 0;;
-        
+
         while (key_file.get(byte)) {
             key.push_back((unsigned char)byte);
             ++key_bytes;
@@ -42,16 +43,6 @@ int main (int argc, char **argv) {
         return 0;
     }
 
-    int n_k = key_size / 32;
-    int n_r = 0;
-    if(key_size == 128) {
-        n_r = 10;
-    } else if(key_size == 256) {
-        n_r = 14;
-    }
-
-    std::vector<std::vector<unsigned char>> key_schedule = KeyExpansion(key,key_size);
-
     // Opens a file as binary
     std::ifstream file;
     std::vector<std::vector<std::vector<unsigned char>>> state;
@@ -62,7 +53,7 @@ int main (int argc, char **argv) {
         int matrix_pos = 0;
         int matrix_index = -1;
         // List of 4x4 Matrices
-        
+
         while (file.get(byte)) {
             // Keeps track of the position in the matrix the next byte should be
             // If it is 0, it means we should start a new matrix
@@ -74,15 +65,16 @@ int main (int argc, char **argv) {
             }
 
             // Converts the matrix_pos range from [0-15] to row/column indexing
-            // Makes this column-order instead of row-order as specified in the document
+            // Makes this column-order instead of row-order
             int row = matrix_pos % 4;
             int col = matrix_pos / 4;
 
             state[matrix_index][row][col] = (unsigned char)byte;
-            
-            // Updates the next position in the matrix & the number of bytes collectd
+
+            // Updates the next position in the matrix
+            // and the number of bytes collectd
             matrix_pos = (matrix_pos+1) % 16;
-            ++num_bytes;            
+            ++num_bytes;
         }
         file.close();
 
@@ -102,7 +94,18 @@ int main (int argc, char **argv) {
                 }
             }
         }
-        
+
+        // Calculate number of rounds for Rijndael's algorithm
+        int n_r = 0;
+        if (key_size == 128) {
+            n_r = 10;
+        } else if (key_size == 256) {
+            n_r = 14;
+        }
+
+        // Obtain the key schedule from the original key
+        std::vector<std::vector<unsigned char>> key_schedule = KeyExpansion(key, key_size);
+
         // Rijndael's Algorithm
         if (mode == "encrypt") {
             AddRoundKey(state, key_schedule, 0);
@@ -141,7 +144,7 @@ int main (int argc, char **argv) {
         for (int i = 0; i < state.size(); ++i) {
             for (int c = 0; c < 4; ++c) {
                 for (int r = 0; r < 4; ++r) {
-                    if (mode == "decrypt" && num_bytes_written >= bytes_to_write){
+                    if (mode == "decrypt" && num_bytes_written >= bytes_to_write) {
                         break;
                     }
                     char byte = state[i][r][c];
@@ -151,15 +154,15 @@ int main (int argc, char **argv) {
             }
         }
         output.close();
-                
     } else {
         std::cout << "Error with opening the input file" << std::endl;
     }
 }
 
-void SubBytes (std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
-    unsigned char lookup_table[16][16] =
-    {
+// Replaces each byte in the state a value in the Rijndael S-Box
+void SubBytes(std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
+    // Rijndael S-Box
+    unsigned char lookup_table[16][16] = {
         0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
         0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
         0xB7, 0xFD, 0x93, 0x26, 0x36, 0x3F, 0xF7, 0xCC, 0x34, 0xA5, 0xE5, 0xF1, 0x71, 0xD8, 0x31, 0x15,
@@ -194,23 +197,27 @@ void SubBytes (std::vector<std::vector<std::vector<unsigned char>>> &input_array
     }
 }
 
-void ShiftRows (std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
-   // make a copy of the input vector to reference when shifting values
-   std::vector<std::vector<std::vector<unsigned char>>> old_array = input_array;
+// Cyclically rotates each row based on its row index (starting at 0)
+void ShiftRows(std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
+    // Make a copy of the input vector to reference when shifting values
+    std::vector<std::vector<std::vector<unsigned char>>> old_array = input_array;
 
-   for (int i = 0; i < input_array.size(); i++) {
-      for (int row = 1; row < input_array[i].size(); row++) {
-         for (int col = 0; col < input_array[i][row].size(); col++) {
-            // replace value with the value found by shifting row bytes
-            input_array[i][row][col] = old_array[i][row][(col+row)%4];
-         }
-      }
-   }
+    for (int i = 0; i < input_array.size(); i++) {
+        for (int row = 1; row < input_array[i].size(); row++) {
+            for (int col = 0; col < input_array[i][row].size(); col++) {
+                // Replace value with the value found by shifting row bytes
+                input_array[i][row][col] = old_array[i][row][(col+row)%4];
+            }
+        }
+    }
 }
 
-void MixColumns (std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
-    unsigned char mul2[256] =
-    {
+// Transforms each column, treating them all polynomials over GF(2^8),
+// multiplied modulo x^4 + 1 with a fixed polynomial a(x) described
+// in the NIST document
+void MixColumns(std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
+    // Multiplication lookup tables
+    unsigned char mul2[256] = {
         0x00, 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1a, 0x1c, 0x1e,
         0x20, 0x22, 0x24, 0x26, 0x28, 0x2a, 0x2c, 0x2e, 0x30, 0x32, 0x34, 0x36, 0x38, 0x3a, 0x3c, 0x3e,
         0x40, 0x42, 0x44, 0x46, 0x48, 0x4a, 0x4c, 0x4e, 0x50, 0x52, 0x54, 0x56, 0x58, 0x5a, 0x5c, 0x5e,
@@ -229,8 +236,7 @@ void MixColumns (std::vector<std::vector<std::vector<unsigned char>>> &input_arr
         0xfb, 0xf9, 0xff, 0xfd, 0xf3, 0xf1, 0xf7, 0xf5, 0xeb, 0xe9, 0xef, 0xed, 0xe3, 0xe1, 0xe7, 0xe5,
     };
 
-    unsigned char mul3[256] =
-    {
+    unsigned char mul3[256] = {
         0x00, 0x03, 0x06, 0x05, 0x0c, 0x0f, 0x0a, 0x09, 0x18, 0x1b, 0x1e, 0x1d, 0x14, 0x17, 0x12, 0x11,
         0x30, 0x33, 0x36, 0x35, 0x3c, 0x3f, 0x3a, 0x39, 0x28, 0x2b, 0x2e, 0x2d, 0x24, 0x27, 0x22, 0x21,
         0x60, 0x63, 0x66, 0x65, 0x6c, 0x6f, 0x6a, 0x69, 0x78, 0x7b, 0x7e, 0x7d, 0x74, 0x77, 0x72, 0x71,
@@ -253,17 +259,20 @@ void MixColumns (std::vector<std::vector<std::vector<unsigned char>>> &input_arr
 
     for (int i = 0; i < input_array.size(); i++) {
       for (int col = 0; col < input_array[i].size(); col++) {
-          input_array[i][0][col] = mul2[old_array[i][0][col]] ^ mul3[old_array[i][1][col]] ^ old_array[i][2][col] ^ old_array[i][3][col];
-          input_array[i][1][col] = old_array[i][0][col] ^ mul2[old_array[i][1][col]] ^ mul3[old_array[i][2][col]] ^ old_array[i][3][col];
-          input_array[i][2][col] = old_array[i][0][col] ^ old_array[i][1][col] ^ mul2[old_array[i][2][col]] ^ mul3[old_array[i][3][col]];
-          input_array[i][3][col] = mul3[old_array[i][0][col]] ^ old_array[i][1][col] ^ old_array[i][2][col] ^ mul2[old_array[i][3][col]];
+            // Use multiplication lookup tables to calculate new values
+            // for each byte in the column
+            input_array[i][0][col] = mul2[old_array[i][0][col]] ^ mul3[old_array[i][1][col]] ^ old_array[i][2][col] ^ old_array[i][3][col];
+            input_array[i][1][col] = old_array[i][0][col] ^ mul2[old_array[i][1][col]] ^ mul3[old_array[i][2][col]] ^ old_array[i][3][col];
+            input_array[i][2][col] = old_array[i][0][col] ^ old_array[i][1][col] ^ mul2[old_array[i][2][col]] ^ mul3[old_array[i][3][col]];
+            input_array[i][3][col] = mul3[old_array[i][0][col]] ^ old_array[i][1][col] ^ old_array[i][2][col] ^ mul2[old_array[i][3][col]];
       }
     }
 }
 
-void InverseMixColumns (std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
-    unsigned char mul9[256] =
-    {
+// Applies the transformation inverse to the one applied in MixColumns()
+void InverseMixColumns(std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
+    // Multiplication lookup tables for Rijndael's Algorithm
+    unsigned char mul9[256] = {
         0x00, 0x09, 0x12, 0x1b, 0x24, 0x2d, 0x36, 0x3f, 0x48, 0x41, 0x5a, 0x53, 0x6c, 0x65, 0x7e, 0x77,
         0x90, 0x99, 0x82, 0x8b, 0xb4, 0xbd, 0xa6, 0xaf, 0xd8, 0xd1, 0xca, 0xc3, 0xfc, 0xf5, 0xee, 0xe7,
         0x3b, 0x32, 0x29, 0x20, 0x1f, 0x16, 0x0d, 0x04, 0x73, 0x7a, 0x61, 0x68, 0x57, 0x5e, 0x45, 0x4c,
@@ -282,8 +291,7 @@ void InverseMixColumns (std::vector<std::vector<std::vector<unsigned char>>> &in
         0x31, 0x38, 0x23, 0x2a, 0x15, 0x1c, 0x07, 0x0e, 0x79, 0x70, 0x6b, 0x62, 0x5d, 0x54, 0x4f, 0x46,
     };
 
-    unsigned char mul11[256] =
-    {
+    unsigned char mul11[256] = {
         0x00, 0x0b, 0x16, 0x1d, 0x2c, 0x27, 0x3a, 0x31, 0x58, 0x53, 0x4e, 0x45, 0x74, 0x7f, 0x62, 0x69,
         0xb0, 0xbb, 0xa6, 0xad, 0x9c, 0x97, 0x8a, 0x81, 0xe8, 0xe3, 0xfe, 0xf5, 0xc4, 0xcf, 0xd2, 0xd9,
         0x7b, 0x70, 0x6d, 0x66, 0x57, 0x5c, 0x41, 0x4a, 0x23, 0x28, 0x35, 0x3e, 0x0f, 0x04, 0x19, 0x12,
@@ -302,8 +310,7 @@ void InverseMixColumns (std::vector<std::vector<std::vector<unsigned char>>> &in
         0xca, 0xc1, 0xdc, 0xd7, 0xe6, 0xed, 0xf0, 0xfb, 0x92, 0x99, 0x84, 0x8f, 0xbe, 0xb5, 0xa8, 0xa3,
     };
 
-    unsigned char mul13[256] =
-    {
+    unsigned char mul13[256] = {
         0x00, 0x0d, 0x1a, 0x17, 0x34, 0x39, 0x2e, 0x23, 0x68, 0x65, 0x72, 0x7f, 0x5c, 0x51, 0x46, 0x4b,
         0xd0, 0xdd, 0xca, 0xc7, 0xe4, 0xe9, 0xfe, 0xf3, 0xb8, 0xb5, 0xa2, 0xaf, 0x8c, 0x81, 0x96, 0x9b,
         0xbb, 0xb6, 0xa1, 0xac, 0x8f, 0x82, 0x95, 0x98, 0xd3, 0xde, 0xc9, 0xc4, 0xe7, 0xea, 0xfd, 0xf0,
@@ -322,8 +329,7 @@ void InverseMixColumns (std::vector<std::vector<std::vector<unsigned char>>> &in
         0xdc, 0xd1, 0xc6, 0xcb, 0xe8, 0xe5, 0xf2, 0xff, 0xb4, 0xb9, 0xae, 0xa3, 0x80, 0x8d, 0x9a, 0x97,
     };
 
-    unsigned char mul14[256] =
-    {
+    unsigned char mul14[256] = {
         0x00, 0x0e, 0x1c, 0x12, 0x38, 0x36, 0x24, 0x2a, 0x70, 0x7e, 0x6c, 0x62, 0x48, 0x46, 0x54, 0x5a,
         0xe0, 0xee, 0xfc, 0xf2, 0xd8, 0xd6, 0xc4, 0xca, 0x90, 0x9e, 0x8c, 0x82, 0xa8, 0xa6, 0xb4, 0xba,
         0xdb, 0xd5, 0xc7, 0xc9, 0xe3, 0xed, 0xff, 0xf1, 0xab, 0xa5, 0xb7, 0xb9, 0x93, 0x9d, 0x8f, 0x81,
@@ -345,36 +351,46 @@ void InverseMixColumns (std::vector<std::vector<std::vector<unsigned char>>> &in
     std::vector<std::vector<std::vector<unsigned char>>> old_array = input_array;
 
     for (int i = 0; i < input_array.size(); i++) {
-      for(int col = 0; col < input_array[i].size(); col++) {
-          input_array[i][0][col] = mul14[old_array[i][0][col]] ^ mul11[old_array[i][1][col]] ^ mul13[old_array[i][2][col]] ^ mul9[old_array[i][3][col]];
-          input_array[i][1][col] = mul9[old_array[i][0][col]] ^ mul14[old_array[i][1][col]] ^ mul11[old_array[i][2][col]] ^ mul13[old_array[i][3][col]];
-          input_array[i][2][col] = mul13[old_array[i][0][col]] ^ mul9[old_array[i][1][col]] ^ mul14[old_array[i][2][col]] ^ mul11[old_array[i][3][col]];
-          input_array[i][3][col] = mul11[old_array[i][0][col]] ^ mul13[old_array[i][1][col]] ^ mul9[old_array[i][2][col]] ^ mul14[old_array[i][3][col]];
-      }
+        for (int col = 0; col < input_array[i].size(); col++) {
+            // Use multiplication lookup tables to calculate new values
+            // for each byte in the column
+            input_array[i][0][col] = mul14[old_array[i][0][col]] ^ mul11[old_array[i][1][col]] ^ mul13[old_array[i][2][col]] ^ mul9[old_array[i][3][col]];
+            input_array[i][1][col] = mul9[old_array[i][0][col]] ^ mul14[old_array[i][1][col]] ^ mul11[old_array[i][2][col]] ^ mul13[old_array[i][3][col]];
+            input_array[i][2][col] = mul13[old_array[i][0][col]] ^ mul9[old_array[i][1][col]] ^ mul14[old_array[i][2][col]] ^ mul11[old_array[i][3][col]];
+            input_array[i][3][col] = mul11[old_array[i][0][col]] ^ mul13[old_array[i][1][col]] ^ mul9[old_array[i][2][col]] ^ mul14[old_array[i][3][col]];
+        }
     }
 }
 
-void InverseShiftRows (std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
-   // make a copy of the input vector to reference when shifting values
-   std::vector<std::vector<std::vector<unsigned char>>> old_array = input_array;
+// Reverses the shifts to the state applied in ShiftRows()
+void InverseShiftRows(std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
+    // make a copy of the input vector to reference when shifting values
+    std::vector<std::vector<std::vector<unsigned char>>> old_array = input_array;
 
-   for (int i = 0; i < input_array.size(); i++) {
-      for (int row = 1; row < input_array[i].size(); row++) {
-         for (int col = 0; col < input_array[i][row].size(); col++) {
-            // replace value with the value found by shifting row bytes
-            int shift = (col-row)%4;
-            if (shift < 0) {
-                shift += 4;
+    for (int i = 0; i < input_array.size(); i++) {
+        for (int row = 1; row < input_array[i].size(); row++) {
+            for (int col = 0; col < input_array[i][row].size(); col++) {
+                // Calculate the shifted index
+                int shift = (col-row)%4;
+
+                // If the new index is less than 0, add 4 to it
+                // so it wraps around to the end of the martix
+                if (shift < 0) {
+                    shift += 4;
+                }
+
+                // replace value with the value found by shifting row bytes
+                input_array[i][row][col] = old_array[i][row][shift];
             }
-            input_array[i][row][col] = old_array[i][row][shift];
-         }
-      }
-   }
+        }
+    }
 }
 
-void InverseSubBytes (std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
-    unsigned char lookup_table[16][16] =
-    { 0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
+// Replaces values in the state with the value from the Inverse S-Box
+void InverseSubBytes(std::vector<std::vector<std::vector<unsigned char>>> &input_array) {
+    // Inverse S-Box
+    unsigned char lookup_table[16][16] = {
+      0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
       0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
       0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
       0x08, 0x2e, 0xa1, 0x66, 0x28, 0xd9, 0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1, 0x25,
@@ -395,21 +411,23 @@ void InverseSubBytes (std::vector<std::vector<std::vector<unsigned char>>> &inpu
     for (int i = 0; i < input_array.size(); i++) {
         for (int row = 0; row < input_array[i].size(); row++) {
             for (int col = 0; col < input_array[i][row].size(); col++) {
-                // get value to use as index into lookup table
+                // Get value to use as index into lookup table
                 unsigned char value = input_array[i][row][col];
-                // get first nibble for row index
+                // Get first nibble for row index
                 int lookup_row = (value & 0xF0) >> 4;
-                // get second nibble for column index
+                // Get second nibble for column index
                 int lookup_col = value & 0x0F;
-                // replace value with the value in lookup table
+                // Replace value with the value in lookup table
                 input_array[i][row][col] = lookup_table[lookup_row][lookup_col];
             }
         }
     }
 }
 
-void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &state, 
-                  std::vector<std::vector<unsigned char>> key_schedule, int round_num) {
+// Adds (xor's) the current round key to every matrix in the state
+void AddRoundKey(std::vector<std::vector<std::vector<unsigned char>>> &state,
+                  std::vector<std::vector<unsigned char>> key_schedule,
+                  int round_num) {
     for (int i = 0; i < state.size(); ++i) {
         int key_column = 4*round_num;
         for (int col = 0; col < 4; ++col) {
@@ -421,9 +439,10 @@ void AddRoundKey (std::vector<std::vector<std::vector<unsigned char>>> &state,
     }
 }
 
-std::vector<unsigned char> SubWord (std::vector<unsigned char> word) {
-    unsigned char lookup_table[16][16] =
-    {
+// Replaces bytes in a word using the S-Box
+std::vector<unsigned char> SubWord(std::vector<unsigned char> word) {
+    // Rijndael Algorithm S-Box
+    unsigned char lookup_table[16][16] = {
         0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
         0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
         0xB7, 0xFD, 0x93, 0x26, 0x36, 0x3F, 0xF7, 0xCC, 0x34, 0xA5, 0xE5, 0xF1, 0x71, 0xD8, 0x31, 0x15,
@@ -443,15 +462,20 @@ std::vector<unsigned char> SubWord (std::vector<unsigned char> word) {
     };
 
     for (int i = 0; i < 4; ++i) {
+        // Get value to use as index into lookup table
         unsigned char value = word[i];
+        // Get first nibble for row index
         int lookup_row = (value & 0xF0) >> 4;
+        // Get second nibble for column index
         int lookup_col = value & 0x0F;
+        // Replace value with the value in lookup table
         word[i] = lookup_table[lookup_row][lookup_col];
     }
     return word;
 }
 
-std::vector<unsigned char> RotWord (std::vector<unsigned char> word) {
+// Cyclically rotates a word
+std::vector<unsigned char> RotWord(std::vector<unsigned char> word) {
     unsigned char temp = word[0];
     word[0] = word[1];
     word[1] = word[2];
@@ -460,16 +484,20 @@ std::vector<unsigned char> RotWord (std::vector<unsigned char> word) {
     return word;
 }
 
-std::vector<unsigned char> XorWords (std::vector<unsigned char> v1, std::vector<unsigned char> v2) {
-    std::vector<unsigned char> return_vector(4,0);
+std::vector<unsigned char> XorWords(std::vector<unsigned char> v1, std::vector<unsigned char> v2) {
+    std::vector<unsigned char> return_vector(4, 0);
     for (int i = 0; i < 4; ++i) {
         return_vector[i] = v1[i] ^ v2[i];
     }
     return return_vector;
 }
 
-std::vector<std::vector<unsigned char>> KeyExpansion (std::vector<unsigned char> key, int key_length) {
+// Creates a key schedule from the given key
+std::vector<std::vector<unsigned char>> KeyExpansion(std::vector<unsigned char> key, int key_length) {
+    // Calculate number of 32 bit words in the key
     int n_k = key_length / 32;
+
+    // Calculate number of round for Rijndael's algorithm
     int n_r = 0;
     if (key_length == 128) {
         n_r = 10;
@@ -478,11 +506,13 @@ std::vector<std::vector<unsigned char>> KeyExpansion (std::vector<unsigned char>
     }
 
     std::vector<std::vector<unsigned char>> key_schedule(4, std::vector<unsigned char> (4*(n_r+1), 0));
-    
-    unsigned char rcon[] = {0x00,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36};
+
+    // Round constant lookup table
+    unsigned char rcon[] = {0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36};
 
     // Add the original key into the key_schedule
     for (int i = 0; i < n_k; ++i) {
+        // Obtain previous word
         key_schedule[0][i] = key[4*i];
         key_schedule[1][i] = key[4*i+1];
         key_schedule[2][i] = key[4*i+2];
@@ -490,7 +520,7 @@ std::vector<std::vector<unsigned char>> KeyExpansion (std::vector<unsigned char>
     }
 
     // Create the expanded part of the key_schedule
-    std::vector<unsigned char> temp(4,0);
+    std::vector<unsigned char> temp(4, 0);
     for (int i = n_k; i < 4*(n_r+1); ++i) {
         temp[0] = key_schedule[0][i-1];
         temp[1] = key_schedule[1][i-1];
@@ -502,9 +532,11 @@ std::vector<std::vector<unsigned char>> KeyExpansion (std::vector<unsigned char>
             rcon_vec[0] = rcon[i/n_k];
             temp = XorWords(SubWord(RotWord(temp)), rcon_vec);
         } else if (n_k == 8 && ((i % n_k) == 4)) {
+            // Every 4th word for 256 bit keys, apply SubWord() before xor'ing
             temp = SubWord(temp);
         }
 
+        // Obtain word n_k columns ago
         std::vector<unsigned char> past_column(4, 0x00);
         past_column[0] = key_schedule[0][i - n_k];
         past_column[1] = key_schedule[1][i - n_k];
